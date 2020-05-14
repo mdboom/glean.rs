@@ -78,6 +78,12 @@ def test_submit_a_ping(safe_httpserver):
     request = safe_httpserver.requests[0]
     assert "baseline" in request.url
 
+    # Decode the request.
+    #import pdb
+    #pdb.set_trace()
+    #payload = request.data
+    #asd
+
 
 def test_submiting_an_empty_ping_doesnt_queue_work(safe_httpserver):
     safe_httpserver.serve_content(b"", code=200)

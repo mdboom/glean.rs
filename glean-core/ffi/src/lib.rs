@@ -347,6 +347,17 @@ pub extern "C" fn glean_get_upload_task() -> FfiPingUploadTask {
     with_glean_value(|glean| FfiPingUploadTask::from(glean.get_upload_task()))
 }
 
+// Unfortunately, the way we use CFFI in Python ("out-of-line", "ABI mode") does not
+// allow return values to be `union`s, so `glean_get_upload_task` cannot be used. Using
+// an output parameter seems to work just fine.
+#[no_mangle]
+pub extern "C" fn glean_get_upload_task_param(result: *mut FfiPingUploadTask) {
+    with_glean_value(|glean| {
+        let ffi_task = FfiPingUploadTask::from(glean.get_upload_task());
+        unsafe { std::ptr::write(result, ffi_task); }
+    });
+}
+
 // We need to pass the whole task instead of only the document id,
 // so that we can free the strings properly on Drop.
 #[no_mangle]

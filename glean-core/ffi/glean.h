@@ -338,6 +338,8 @@ uint8_t glean_experiment_test_is_active(FfiStr experiment_id);
 
 FfiPingUploadTask glean_get_upload_task(void);
 
+void glean_get_upload_task_param(FfiPingUploadTask *result);
+
 /**
  * # Safety
  *

@@ -7,7 +7,8 @@ import logging
 from pathlib import Path
 import re
 
-
+from .. import _ffi
+from .._glean_ffi import ffi as ffi_support # type: ignore
 from .._dispatcher import Dispatcher
 from .._process_dispatcher import ProcessDispatcher
 
@@ -80,6 +81,16 @@ def _process(storage_dir: Path, configuration) -> bool:
 
     log.debug("Processing persisted pings at {}".format(storage_dir.resolve()))
 
+    import pdb
+    pdb.set_trace()
+
+    while True:
+        incoming_task = ffi_support.new("FfiPingUploadTask*")
+        _ffi.lib.glean_get_upload_task_param(incoming_task)
+        print(incoming_task)
+
+    return False
+    """
     try:
         for path in storage_dir.iterdir():
             if path.is_file():
@@ -94,8 +105,9 @@ def _process(storage_dir: Path, configuration) -> bool:
     except FileNotFoundError:
         log.debug("File not found: {}".format(storage_dir.resolve()))
         success = False
-
+    
     return success
+    """
 
 
 def _process_file(path: Path, configuration) -> bool:
