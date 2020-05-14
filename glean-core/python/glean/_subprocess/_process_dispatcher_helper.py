@@ -29,8 +29,6 @@ if __name__ == "__main__":  # pragma: no cover
         cov._warn_unimported_source = False
         cov._auto_save = True
 
-    __builtins__.IN_GLEAN_SUBPROCESS = True  # type: ignore
-
     func, args = pickle.loads(base64.b64decode(sys.argv[1]))
 
     success = func(*args)

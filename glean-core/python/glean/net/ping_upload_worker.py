@@ -6,9 +6,10 @@
 import logging
 from pathlib import Path
 import re
+import time
 
 from .. import _ffi
-from .._glean_ffi import ffi as ffi_support # type: ignore
+from .._glean_ffi import ffi as ffi_support  # type: ignore
 from .._dispatcher import Dispatcher
 from .._process_dispatcher import ProcessDispatcher
 
@@ -47,7 +48,13 @@ class PingUploadWorker:
         from .. import Glean
 
         return ProcessDispatcher.dispatch(
-            _process, (cls.storage_directory(), Glean._configuration)
+            _process,
+            (
+                cls.storage_directory(),
+                Glean._configuration,
+                Glean._data_dir,
+                Glean._application_id,
+            ),
         )
 
     @classmethod
@@ -76,18 +83,47 @@ _FILE_PATTERN = re.compile(
 )
 
 
-def _process(storage_dir: Path, configuration) -> bool:
+def _process(storage_dir: Path, configuration, data_dir, application_id) -> bool:
     success = True
 
-    log.debug("Processing persisted pings at {}".format(storage_dir.resolve()))
+    # Import here to avoid cyclical import
+    from ..glean import Glean
 
-    import pdb
-    pdb.set_trace()
+    if not Glean.is_initialized():
+        # TODO: Is this going to do a bunch of things we don't need to do
+        # in the ping uploader (wasting time, or worse, changing database
+        # state in ways we won't want?)  We probably need a separate code
+        # path just for the ping upload manager thing.
+
+        cfg = _ffi.make_config(
+            data_dir,
+            application_id,
+            True,
+            # TODO: This should probably be sys.maxint for max events so we
+            # don't trigger event uploading
+            1000000,
+        )
+
+        _ffi.lib.glean_initialize(cfg)
+
+        # TODO: Check the return value
+
+    log.debug("Processing persisted pings at {}".format(storage_dir.resolve()))
 
     while True:
         incoming_task = ffi_support.new("FfiPingUploadTask*")
         _ffi.lib.glean_get_upload_task_param(incoming_task)
-        print(incoming_task)
+        tag = incoming_task.tag
+        print("tag", tag)
+        if tag == 0: # UPLOAD TAG
+            print("doc id", _ffi.ffi_decode_string(incoming_task.upload.document_id))
+            print("path", _ffi.ffi_decode_string(incoming_task.upload.path))
+            print("body", _ffi.ffi_decode_byte_buffer(incoming_task.upload.body))
+            print("headers", _ffi.ffi_decode_string(incoming_task.upload.headers))
+        elif tag == 1:
+            time.sleep(1)
+        elif tag == 2:
+            break
 
     return False
     """

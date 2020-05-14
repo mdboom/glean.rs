@@ -107,8 +107,23 @@ def ffi_decode_string(cdata) -> str:
         lib.glean_str_free(cdata)
 
 
+def ffi_decode_byte_buffer(byte_buffer) -> bytes:
+    """
+    Convert a ByteBuffer returned from Rust to a Python bytes object, and free
+    the Rust buffer.
+    """
+    try:
+        # This copies the buffer, which is slower, but makes memory management
+        # easier because we don't have to remember to free the Rust side with
+        # glean_str_free() later.
+        return bytes(ffi.buffer(byte_buffer.data, byte_buffer.len))
+    finally:
+        lib.glean_str_free(byte_buffer.data)
+
+
 __all__ = [
     "ffi",
+    "ffi_decode_bytebuffer",
     "ffi_decode_string",
     "ffi_encode_string",
     "ffi_encode_vec_string",
