@@ -15,6 +15,7 @@ from glean._dispatcher import Dispatcher
 from glean import Glean
 from glean import metrics
 from glean.metrics import Lifetime
+from glean import _ffi
 
 
 def test_launch_correctly_adds_tasks_to_queue_if_queue_tasks_is_true():
@@ -204,6 +205,7 @@ def _subprocess():
 @pytest.mark.skipif(
     not sys.platform.startswith("linux"), reason="Test only works on Linux"
 )
+@pytest.mark.skipif(_ffi.NOOP_MODE, reason="Test doesn't apply to NOOP_MODE")
 def test_single_threaded_in_multiprocessing_subprocess():
     import multiprocessing
 

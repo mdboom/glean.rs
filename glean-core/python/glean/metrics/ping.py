@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from ..glean import Glean
 from .. import _ffi
+from .._util import noop
 
 
 class PingType:
@@ -26,17 +27,18 @@ class PingType:
         """
         self._name = name
         self._reason_codes = reason_codes
-        self._handle = _ffi.lib.glean_new_ping_type(
-            _ffi.ffi_encode_string(name),
-            include_client_id,
-            send_if_empty,
-            _ffi.ffi_encode_vec_string(reason_codes),
-            len(reason_codes),
-        )
         Glean.register_ping_type(self)
+        if not _ffi.NOOP_MODE:
+            self._handle = _ffi.lib.glean_new_ping_type(
+                _ffi.ffi_encode_string(name),
+                include_client_id,
+                send_if_empty,
+                _ffi.ffi_encode_vec_string(reason_codes),
+                len(reason_codes),
+            )
 
     def __del__(self):
-        if self._handle != 0:
+        if getattr(self, "_handle", 0) != 0:
             _ffi.lib.glean_destroy_ping_type(self._handle)
 
     @property
@@ -46,6 +48,7 @@ class PingType:
         """
         return self._name
 
+    @noop(None)
     def submit(self, reason: Optional[int] = None) -> None:
         """
         Collect and submit the ping for eventual uploading.

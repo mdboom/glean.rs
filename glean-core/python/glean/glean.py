@@ -19,12 +19,13 @@ import inspect
 from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
 
+from . import _ffi
 from .config import Configuration
 from ._dispatcher import Dispatcher
-from . import _ffi
 from .net import PingUploadWorker
 from ._process_dispatcher import ProcessDispatcher
 from . import _util
+from ._util import noop
 
 
 # To avoid cyclical imports, but still make mypy type-checking work.
@@ -154,6 +155,12 @@ class Glean:
                 cls._application_build_id = "Unknown"
             else:
                 cls._application_build_id = application_build_id
+
+        if _ffi.NOOP_MODE:
+            Dispatcher.flush_queued_initial_tasks()
+
+            cls._initialized = False
+            return
 
         # Use `Glean._execute_task` rather than `Glean.launch` here, since we
         # never want to put this work on the `Dispatcher._preinit_queue`.
@@ -298,6 +305,7 @@ class Glean:
         """
         return cls._initialized
 
+    @noop(None)
     @classmethod
     def register_ping_type(cls, ping: "PingType") -> None:
         """
@@ -313,6 +321,7 @@ class Glean:
             # forever should not have much of an impact.
             cls._ping_type_queue.add(ping)
 
+    @noop(False)
     @classmethod
     def test_has_ping_type(cls, ping_name: str) -> bool:
         """
@@ -322,6 +331,7 @@ class Glean:
             _ffi.lib.glean_test_has_ping_type(_ffi.ffi_encode_string(ping_name))
         )
 
+    @noop(None)
     @classmethod
     def set_upload_enabled(cls, enabled: bool) -> None:
         """
@@ -367,6 +377,7 @@ class Glean:
                 # If uploading is disabled, we need to send the deletion-request ping
                 PingUploadWorker.process()
 
+    @noop(False)
     @classmethod
     def _get_upload_enabled(cls) -> bool:
         """
@@ -379,6 +390,7 @@ class Glean:
         else:
             return False
 
+    @noop(None)
     @classmethod
     def set_experiment_active(
         cls, experiment_id: str, branch: str, extra: Optional[Dict[str, str]] = None
@@ -411,6 +423,7 @@ class Glean:
                 len(keys),
             )
 
+    @noop(None)
     @classmethod
     def set_experiment_inactive(cls, experiment_id: str) -> None:
         """
@@ -426,6 +439,7 @@ class Glean:
                 _ffi.ffi_encode_string(experiment_id)
             )
 
+    @noop(False)
     @classmethod
     def test_is_experiment_active(cls, experiment_id: str) -> bool:
         """
@@ -435,7 +449,7 @@ class Glean:
             experiment_id (str): The id of the experiment to look for.
 
         Returns:
-            is_active (bool): If the experiement is active and reported in
+            is_active (bool): If the experiment is active and reported in
                 pings.
         """
         return bool(
@@ -457,6 +471,9 @@ class Glean:
                 the experiment.
         """
         from .metrics import RecordedExperimentData
+
+        if not cls.test_is_experiment_active(experiment_id):
+            raise ValueError(f"Experiment {experiment_id} is not active.")
 
         json_string = _ffi.ffi_decode_string(
             _ffi.lib.glean_experiment_test_get_data(
@@ -497,6 +514,7 @@ class Glean:
         """
         return cls._data_dir
 
+    @noop("{}")
     @classmethod
     def test_collect(cls, ping: "PingType", reason: Optional[str] = None) -> str:
         """

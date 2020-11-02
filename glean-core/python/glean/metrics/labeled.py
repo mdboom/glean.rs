@@ -12,6 +12,7 @@ from .counter import CounterMetricType
 from .lifetime import Lifetime
 from .string import StringMetricType
 from ..testing import ErrorType
+from .._util import noop
 
 
 class LabeledMetricBase:
@@ -57,49 +58,72 @@ class LabeledMetricBase:
         self._disabled = disabled
         self._send_in_pings = send_in_pings
 
-        if labels is not None:
-            label_list = _ffi.ffi_encode_vec_string(list(labels))
-            label_len = len(labels)
-        else:
-            label_list = _ffi.ffi.NULL
-            label_len = 0
+        if not _ffi.NOOP_MODE:
+            if labels is not None:
+                label_list = _ffi.ffi_encode_vec_string(list(labels))
+                label_len = len(labels)
+            else:
+                label_list = _ffi.ffi.NULL
+                label_len = 0
 
-        self._handle = self._metric_type_instantiator(
-            _ffi.ffi_encode_string(category),
-            _ffi.ffi_encode_string(name),
-            _ffi.ffi_encode_vec_string(send_in_pings),
-            len(send_in_pings),
-            lifetime.value,
-            disabled,
-            label_list,
-            label_len,
-        )
+            self._handle = self._metric_type_instantiator(
+                _ffi.ffi_encode_string(category),
+                _ffi.ffi_encode_string(name),
+                _ffi.ffi_encode_vec_string(send_in_pings),
+                len(send_in_pings),
+                lifetime.value,
+                disabled,
+                label_list,
+                label_len,
+            )
 
-    def __getitem__(self, item: str) -> Any:
-        """
-        Get the specific metric for a given label.
+    if _ffi.NOOP_MODE:
+        def __getitem__(self, item: str) -> Any:
+            """
+            Get the specific metric for a given label.
 
-        If a set of acceptable labels were specified in the metrics.yaml file,
-        and the given label is not in the set, it will be recorded under the
-        special `__other__`.
+            If a set of acceptable labels were specified in the metrics.yaml file,
+            and the given label is not in the set, it will be recorded under the
+            special `__other__`.
 
-        If a set of acceptable labels was not specified in the metrics.yaml
-        file, only the first 16 unique labels will be used. After that, any
-        additional labels will be recorded under the special `__other__` label.
+            If a set of acceptable labels was not specified in the metrics.yaml
+            file, only the first 16 unique labels will be used. After that, any
+            additional labels will be recorded under the special `__other__` label.
 
-        Labels must be snake_case and less than 30 characters. If an invalid
-        label is used, the metric will be recorded in the special `__other__`
-        label.
-        """
-        handle = self._submetric_type_instantiator(
-            self._handle, _ffi.ffi_encode_string(item)
-        )
-        metric = self._submetric_type.__new__(self._submetric_type)  # type: ignore
-        metric._handle = handle
-        metric._disabled = self._disabled
-        metric._send_in_pings = self._send_in_pings
-        return metric
+            Labels must be snake_case and less than 30 characters. If an invalid
+            label is used, the metric will be recorded in the special `__other__`
+            label.
+            """
+            handle = self._submetric_type_instantiator(
+                self._handle, _ffi.ffi_encode_string(item)
+            )
+            metric = self._submetric_type.__new__(self._submetric_type)  # type: ignore
+            metric._handle = handle
+            metric._disabled = self._disabled
+            metric._send_in_pings = self._send_in_pings
+            return metric
+    else:
+        def __getitem__(self, item: str) -> Any:
+            """
+            Get the specific metric for a given label.
 
+            If a set of acceptable labels were specified in the metrics.yaml file,
+            and the given label is not in the set, it will be recorded under the
+            special `__other__`.
+
+            If a set of acceptable labels was not specified in the metrics.yaml
+            file, only the first 16 unique labels will be used. After that, any
+            additional labels will be recorded under the special `__other__` label.
+
+            Labels must be snake_case and less than 30 characters. If an invalid
+            label is used, the metric will be recorded in the special `__other__`
+            label.
+            """
+            metric = self._submetric_type.__new__(self._submetric_type)  # type: ignore
+            return metric
+
+
+    @noop(0)
     def test_get_num_recorded_errors(
         self, error_type: ErrorType, ping_name: Optional[str] = None
     ) -> int:
@@ -127,29 +151,32 @@ class LabeledMetricBase:
 
 class LabeledBooleanMetricType(LabeledMetricBase):
     _submetric_type = BooleanMetricType
-    _metric_type_instantiator = _ffi.lib.glean_new_labeled_boolean_metric
-    _submetric_type_instantiator = _ffi.lib.glean_labeled_boolean_metric_get
-    _test_get_num_recorded_errors_ffi = (
-        _ffi.lib.glean_labeled_boolean_test_get_num_recorded_errors
-    )
+    if not _ffi.NOOP_MODE:
+        _metric_type_instantiator = _ffi.lib.glean_new_labeled_boolean_metric
+        _submetric_type_instantiator = _ffi.lib.glean_labeled_boolean_metric_get
+        _test_get_num_recorded_errors_ffi = (
+            _ffi.lib.glean_labeled_boolean_test_get_num_recorded_errors
+        )
 
 
 class LabeledCounterMetricType(LabeledMetricBase):
     _submetric_type = CounterMetricType
-    _metric_type_instantiator = _ffi.lib.glean_new_labeled_counter_metric
-    _submetric_type_instantiator = _ffi.lib.glean_labeled_counter_metric_get
-    _test_get_num_recorded_errors_ffi = (
-        _ffi.lib.glean_labeled_counter_test_get_num_recorded_errors
-    )
+    if not _ffi.NOOP_MODE:
+        _metric_type_instantiator = _ffi.lib.glean_new_labeled_counter_metric
+        _submetric_type_instantiator = _ffi.lib.glean_labeled_counter_metric_get
+        _test_get_num_recorded_errors_ffi = (
+            _ffi.lib.glean_labeled_counter_test_get_num_recorded_errors
+        )
 
 
 class LabeledStringMetricType(LabeledMetricBase):
     _submetric_type = StringMetricType
-    _metric_type_instantiator = _ffi.lib.glean_new_labeled_string_metric
-    _submetric_type_instantiator = _ffi.lib.glean_labeled_string_metric_get
-    _test_get_num_recorded_errors_ffi = (
-        _ffi.lib.glean_labeled_string_test_get_num_recorded_errors
-    )
+    if not _ffi.NOOP_MODE:
+        _metric_type_instantiator = _ffi.lib.glean_new_labeled_string_metric
+        _submetric_type_instantiator = _ffi.lib.glean_labeled_string_metric_get
+        _test_get_num_recorded_errors_ffi = (
+            _ffi.lib.glean_labeled_string_test_get_num_recorded_errors
+        )
 
 
 __all__ = [

@@ -10,6 +10,7 @@ import uuid
 from .. import _ffi
 from .._dispatcher import Dispatcher
 from ..testing import ErrorType
+from .._util import noop
 
 
 from .lifetime import Lifetime
@@ -38,19 +39,21 @@ class UuidMetricType:
         self._disabled = disabled
         self._send_in_pings = send_in_pings
 
-        self._handle = _ffi.lib.glean_new_uuid_metric(
-            _ffi.ffi_encode_string(category),
-            _ffi.ffi_encode_string(name),
-            _ffi.ffi_encode_vec_string(send_in_pings),
-            len(send_in_pings),
-            lifetime.value,
-            disabled,
-        )
+        if not _ffi.NOOP_MODE:
+            self._handle = _ffi.lib.glean_new_uuid_metric(
+                _ffi.ffi_encode_string(category),
+                _ffi.ffi_encode_string(name),
+                _ffi.ffi_encode_vec_string(send_in_pings),
+                len(send_in_pings),
+                lifetime.value,
+                disabled,
+            )
 
     def __del__(self):
         if getattr(self, "_handle", 0) != 0:
             _ffi.lib.glean_destroy_uuid_metric(self._handle)
 
+    @noop(None)
     def generate_and_set(self) -> Optional[uuid.UUID]:
         """
         Generate a new UUID value and set it in the metric store.
@@ -62,6 +65,7 @@ class UuidMetricType:
         self.set(id)
         return id
 
+    @noop(None)
     def set(self, value: uuid.UUID) -> None:
         """
         Explicitly set an existing UUID value.
@@ -76,6 +80,7 @@ class UuidMetricType:
         def set():
             _ffi.lib.glean_uuid_set(self._handle, _ffi.ffi_encode_string(str(value)))
 
+    @noop(False)
     def test_has_value(self, ping_name: Optional[str] = None) -> bool:
         """
         Tests whether a value is stored for the metric for testing purposes
@@ -123,6 +128,7 @@ class UuidMetricType:
             )
         )
 
+    @noop(0)
     def test_get_num_recorded_errors(
         self, error_type: ErrorType, ping_name: Optional[str] = None
     ) -> int:

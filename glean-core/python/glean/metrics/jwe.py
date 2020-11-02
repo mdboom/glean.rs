@@ -10,6 +10,7 @@ import json
 from .. import _ffi
 from .._dispatcher import Dispatcher
 from ..testing import ErrorType
+from .._util import noop
 
 
 from .lifetime import Lifetime
@@ -56,20 +57,22 @@ class JweMetricType:
         self._disabled = disabled
         self._send_in_pings = send_in_pings
 
-        self._handle = _ffi.lib.glean_new_jwe_metric(
-            _ffi.ffi_encode_string(category),
-            _ffi.ffi_encode_string(name),
-            _ffi.ffi_encode_vec_string(send_in_pings),
-            len(send_in_pings),
-            lifetime.value,
-            disabled,
-        )
+        if not _ffi.NOOP_MODE:
+            self._handle = _ffi.lib.glean_new_jwe_metric(
+                _ffi.ffi_encode_string(category),
+                _ffi.ffi_encode_string(name),
+                _ffi.ffi_encode_vec_string(send_in_pings),
+                len(send_in_pings),
+                lifetime.value,
+                disabled,
+            )
 
     def __del__(self):
         if getattr(self, "_handle", 0) != 0:
             _ffi.lib.glean_destroy_jwe_metric(self._handle)
 
-    def set_with_compact_representation(self, value: str):
+    @noop(None)
+    def set_with_compact_representation(self, value: str) -> None:
         """
         Set to the specified JWE value.
 
@@ -85,6 +88,7 @@ class JweMetricType:
                 self._handle, _ffi.ffi_encode_string(value)
             )
 
+    @noop(None)
     def set(
         self, header: str, key: str, init_vector: str, cipher_text: str, auth_tag: str
     ) -> None:
@@ -115,6 +119,7 @@ class JweMetricType:
                 _ffi.ffi_encode_string(auth_tag),
             )
 
+    @noop(False)
     def test_has_value(self, ping_name: Optional[str] = None) -> bool:
         """
         Tests whether a value is stored for the metric for testing purposes
@@ -193,6 +198,7 @@ class JweMetricType:
             )
         )
 
+    @noop(0)
     def test_get_num_recorded_errors(
         self, error_type: ErrorType, ping_name: Optional[str] = None
     ) -> int:

@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
+import functools
 import locale
 import sys
 import time
@@ -74,3 +75,24 @@ class classproperty:
 
     def __get__(self, obj, owner):
         return self.f(owner)
+
+
+def noop(value):
+    from glean import _ffi
+
+    if _ffi.NOOP_MODE:
+
+        def wrap(f):
+            @functools.wraps(f)
+            def wrapper(*args, **kwargs):
+                return value
+
+            return wrapper
+
+        return wrap
+    else:
+
+        def wrap(f):
+            return f
+
+        return wrap

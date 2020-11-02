@@ -18,6 +18,7 @@ from glean import metrics
 from glean._dispatcher import Dispatcher
 from glean.metrics import Lifetime
 from glean.testing import ErrorType
+from glean._ffi import NOOP_MODE
 
 
 def test_labeled_counter_type(ping_schema_url):
@@ -32,11 +33,17 @@ def test_labeled_counter_type(ping_schema_url):
     labeled_counter_metric["label1"].add(1)
     labeled_counter_metric["label2"].add(2)
 
-    assert labeled_counter_metric["label1"].test_has_value()
-    assert 1 == labeled_counter_metric["label1"].test_get_value()
+    if NOOP_MODE:
+        assert not labeled_counter_metric["label1"].test_has_value()
+    else:
+        assert labeled_counter_metric["label1"].test_has_value()
+        assert 1 == labeled_counter_metric["label1"].test_get_value()
 
-    assert labeled_counter_metric["label2"].test_has_value()
-    assert 2 == labeled_counter_metric["label2"].test_get_value()
+    if NOOP_MODE:
+        assert not labeled_counter_metric["label2"].test_has_value()
+    else:
+        assert labeled_counter_metric["label2"].test_has_value()
+        assert 2 == labeled_counter_metric["label2"].test_get_value()
 
     json_content = Glean.test_collect(_builtins.pings.metrics)
 

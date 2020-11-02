@@ -9,6 +9,7 @@ from typing import List, Optional
 from .. import _ffi
 from .._dispatcher import Dispatcher
 from ..testing import ErrorType
+from .._util import noop
 
 
 from .distribution_data import DistributionData
@@ -38,20 +39,22 @@ class MemoryDistributionMetricType:
         self._disabled = disabled
         self._send_in_pings = send_in_pings
 
-        self._handle = _ffi.lib.glean_new_memory_distribution_metric(
-            _ffi.ffi_encode_string(category),
-            _ffi.ffi_encode_string(name),
-            _ffi.ffi_encode_vec_string(send_in_pings),
-            len(send_in_pings),
-            lifetime.value,
-            disabled,
-            memory_unit.value,
-        )
+        if not _ffi.NOOP_MODE:
+            self._handle = _ffi.lib.glean_new_memory_distribution_metric(
+                _ffi.ffi_encode_string(category),
+                _ffi.ffi_encode_string(name),
+                _ffi.ffi_encode_vec_string(send_in_pings),
+                len(send_in_pings),
+                lifetime.value,
+                disabled,
+                memory_unit.value,
+            )
 
     def __del__(self):
         if getattr(self, "_handle", 0) != 0:
             _ffi.lib.glean_destroy_memory_distribution_metric(self._handle)
 
+    @noop(None)
     def accumulate(self, sample: int) -> None:
         """
         Record a single value, in the unit specified by `memory_unit`, to the distribution.
@@ -66,6 +69,7 @@ class MemoryDistributionMetricType:
         def accumulate():
             return _ffi.lib.glean_memory_distribution_accumulate(self._handle, sample)
 
+    @noop(False)
     def test_has_value(self, ping_name: Optional[str] = None) -> bool:
         """
         Tests whether a value is stored for the metric for testing purposes
@@ -112,6 +116,7 @@ class MemoryDistributionMetricType:
             )
         )
 
+    @noop(0)
     def test_get_num_recorded_errors(
         self, error_type: ErrorType, ping_name: Optional[str] = None
     ) -> int:

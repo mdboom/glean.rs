@@ -10,6 +10,7 @@ from typing import Iterable, List, Optional
 from .. import _ffi
 from .._dispatcher import Dispatcher
 from ..testing import ErrorType
+from .._util import noop
 
 
 from .lifetime import Lifetime
@@ -28,6 +29,7 @@ class StringListMetricType:
     input data and making sure that limits are enforced.
     """
 
+    @noop(None)
     def __init__(
         self,
         disabled: bool,
@@ -39,19 +41,21 @@ class StringListMetricType:
         self._disabled = disabled
         self._send_in_pings = send_in_pings
 
-        self._handle = _ffi.lib.glean_new_string_list_metric(
-            _ffi.ffi_encode_string(category),
-            _ffi.ffi_encode_string(name),
-            _ffi.ffi_encode_vec_string(send_in_pings),
-            len(send_in_pings),
-            lifetime.value,
-            disabled,
-        )
+        if not _ffi.NOOP_MODE:
+            self._handle = _ffi.lib.glean_new_string_list_metric(
+                _ffi.ffi_encode_string(category),
+                _ffi.ffi_encode_string(name),
+                _ffi.ffi_encode_vec_string(send_in_pings),
+                len(send_in_pings),
+                lifetime.value,
+                disabled,
+            )
 
     def __del__(self):
         if getattr(self, "_handle", 0) != 0:
             _ffi.lib.glean_destroy_string_list_metric(self._handle)
 
+    @noop(None)
     def add(self, value: str) -> None:
         """
         Appends a string value to one or more string list metric stores. If the
@@ -68,6 +72,7 @@ class StringListMetricType:
         def set():
             _ffi.lib.glean_string_list_add(self._handle, _ffi.ffi_encode_string(value))
 
+    @noop(None)
     def set(self, value: Iterable[str]) -> None:
         """
         Sets a string list to one or more metric stores. If any string exceeds
@@ -87,6 +92,7 @@ class StringListMetricType:
                 self._handle, _ffi.ffi_encode_vec_string(values), len(values)
             )
 
+    @noop(False)
     def test_has_value(self, ping_name: Optional[str] = None) -> bool:
         """
         Tests whether a value is stored for the metric for testing purposes
@@ -133,6 +139,7 @@ class StringListMetricType:
             )
         )
 
+    @noop(0)
     def test_get_num_recorded_errors(
         self, error_type: ErrorType, ping_name: Optional[str] = None
     ) -> int:

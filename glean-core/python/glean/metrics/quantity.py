@@ -9,6 +9,7 @@ from typing import List, Optional
 from .. import _ffi
 from .._dispatcher import Dispatcher
 from ..testing import ErrorType
+from .._util import noop
 
 
 from .lifetime import Lifetime
@@ -27,6 +28,7 @@ class QuantityMetricType:
     enforced.
     """
 
+    @noop(None)
     def __init__(
         self,
         disabled: bool,
@@ -38,19 +40,21 @@ class QuantityMetricType:
         self._disabled = disabled
         self._send_in_pings = send_in_pings
 
-        self._handle = _ffi.lib.glean_new_quantity_metric(
-            _ffi.ffi_encode_string(category),
-            _ffi.ffi_encode_string(name),
-            _ffi.ffi_encode_vec_string(send_in_pings),
-            len(send_in_pings),
-            lifetime.value,
-            disabled,
-        )
+        if not _ffi.NOOP_MODE:
+            self._handle = _ffi.lib.glean_new_quantity_metric(
+                _ffi.ffi_encode_string(category),
+                _ffi.ffi_encode_string(name),
+                _ffi.ffi_encode_vec_string(send_in_pings),
+                len(send_in_pings),
+                lifetime.value,
+                disabled,
+            )
 
     def __del__(self):
         if getattr(self, "_handle", 0) != 0:
             _ffi.lib.glean_destroy_quantity_metric(self._handle)
 
+    @noop(None)
     def set(self, value: int) -> None:
         """
         Set a quantity value.
@@ -65,6 +69,7 @@ class QuantityMetricType:
         def set():
             _ffi.lib.glean_quantity_set(self._handle, value)
 
+    @noop(False)
     def test_has_value(self, ping_name: Optional[str] = None) -> bool:
         """
         Tests whether a value is stored for the metric for testing purposes
@@ -107,6 +112,7 @@ class QuantityMetricType:
             self._handle, _ffi.ffi_encode_string(ping_name)
         )
 
+    @noop(0)
     def test_get_num_recorded_errors(
         self, error_type: ErrorType, ping_name: Optional[str] = None
     ) -> int:

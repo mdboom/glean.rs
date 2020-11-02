@@ -17,6 +17,7 @@ from glean import metrics
 from glean.metrics import Lifetime
 from glean import testing
 from glean import __version__ as glean_version
+from glean._ffi import NOOP_MODE
 
 
 ROOT = Path(__file__).parent
@@ -45,22 +46,25 @@ def test_the_api_records_to_its_storage_engine():
     click.record()
 
     # Check that data was properly recorded
-    snapshot = click.test_get_value()
-    assert click.test_has_value()
-    assert 3 == len(snapshot)
+    if NOOP_MODE:
+        assert not click.test_has_value()
+    else:
+        snapshot = click.test_get_value()
+        assert click.test_has_value()
+        assert 3 == len(snapshot)
 
-    first_event = [x for x in snapshot if x.extra.get("object_id") == "buttonA"][0]
-    assert "ui" == first_event.category
-    assert "click" == first_event.name
-    assert "ui.click" == first_event.identifier
-    assert "foo" == first_event.extra["other"]
+        first_event = [x for x in snapshot if x.extra.get("object_id") == "buttonA"][0]
+        assert "ui" == first_event.category
+        assert "click" == first_event.name
+        assert "ui.click" == first_event.identifier
+        assert "foo" == first_event.extra["other"]
 
-    second_event = [x for x in snapshot if x.extra.get("object_id") == "buttonB"][0]
-    assert "ui" == second_event.category
-    assert "click" == second_event.name
-    assert "bar" == second_event.extra["other"]
+        second_event = [x for x in snapshot if x.extra.get("object_id") == "buttonB"][0]
+        assert "ui" == second_event.category
+        assert "click" == second_event.name
+        assert "bar" == second_event.extra["other"]
 
-    assert first_event.timestamp < second_event.timestamp
+        assert first_event.timestamp < second_event.timestamp
 
 
 def test_the_api_records_to_its_storage_engine_when_category_is_empty():
@@ -84,17 +88,20 @@ def test_the_api_records_to_its_storage_engine_when_category_is_empty():
     click.record(extra={ClickKeys.OBJECT_ID: "buttonB"})
 
     # Check that the data was properly recorded
-    snapshot = click.test_get_value()
-    assert click.test_has_value()
-    assert 2 == len(snapshot)
+    if NOOP_MODE:
+        assert not click.test_has_value()
+    else:
+        snapshot = click.test_get_value()
+        assert click.test_has_value()
+        assert 2 == len(snapshot)
 
-    first_event = [x for x in snapshot if x.extra["object_id"] == "buttonA"][0]
-    assert "click" == first_event.name
+        first_event = [x for x in snapshot if x.extra["object_id"] == "buttonA"][0]
+        assert "click" == first_event.name
 
-    second_event = [x for x in snapshot if x.extra["object_id"] == "buttonB"][0]
-    assert "click" == second_event.name
+        second_event = [x for x in snapshot if x.extra["object_id"] == "buttonB"][0]
+        assert "click" == second_event.name
 
-    assert first_event.timestamp < second_event.timestamp
+        assert first_event.timestamp < second_event.timestamp
 
 
 def test_disabled_events_must_not_record_data():
@@ -153,19 +160,22 @@ def test_the_api_records_to_secondary_pings():
     click.record(extra={ClickKeys.OBJECT_ID: "buttonB"})
 
     # Check that the data was properly recorded in the second ping
-    snapshot = click.test_get_value("store2")
-    assert click.test_has_value("store2")
-    assert 2 == len(snapshot)
+    if NOOP_MODE:
+        assert not click.test_has_value("store2")
+    else:
+        snapshot = click.test_get_value("store2")
+        assert click.test_has_value("store2")
+        assert 2 == len(snapshot)
 
-    first_event = [x for x in snapshot if x.extra["object_id"] == "buttonA"][0]
-    assert "ui" == first_event.category
-    assert "click" == first_event.name
+        first_event = [x for x in snapshot if x.extra["object_id"] == "buttonA"][0]
+        assert "ui" == first_event.category
+        assert "click" == first_event.name
 
-    second_event = [x for x in snapshot if x.extra["object_id"] == "buttonB"][0]
-    assert "ui" == first_event.category
-    assert "click" == second_event.name
+        second_event = [x for x in snapshot if x.extra["object_id"] == "buttonB"][0]
+        assert "ui" == first_event.category
+        assert "click" == second_event.name
 
-    assert first_event.timestamp < second_event.timestamp
+        assert first_event.timestamp < second_event.timestamp
 
 
 def test_events_should_not_record_when_upload_is_disabled():
@@ -183,16 +193,22 @@ def test_events_should_not_record_when_upload_is_disabled():
 
     Glean.set_upload_enabled(True)
     event_metric.record({EventKeys.TEST_NAME: "event1"})
-    snapshot1 = event_metric.test_get_value()
-    assert 1 == len(snapshot1)
+    if NOOP_MODE:
+        assert not event_metric.test_has_value()
+    else:
+        snapshot1 = event_metric.test_get_value()
+        assert 1 == len(snapshot1)
     Glean.set_upload_enabled(False)
     event_metric.record({EventKeys.TEST_NAME: "event2"})
     with pytest.raises(ValueError):
         event_metric.test_get_value()
     Glean.set_upload_enabled(True)
     event_metric.record({EventKeys.TEST_NAME: "event3"})
-    snapshot3 = event_metric.test_get_value()
-    assert 1 == len(snapshot3)
+    if NOOP_MODE:
+        assert not event_metric.test_has_value()
+    else:
+        snapshot3 = event_metric.test_get_value()
+        assert 1 == len(snapshot3)
 
 
 def test_flush_queued_events_on_startup(safe_httpserver):
@@ -213,7 +229,10 @@ def test_flush_queued_events_on_startup(safe_httpserver):
     )
 
     event.record(extra={EventKeys.SOME_EXTRA: "bar"})
-    assert 1 == len(event.test_get_value())
+    if NOOP_MODE:
+        assert not event.test_has_value()
+    else:
+        assert 1 == len(event.test_get_value())
 
     testing.reset_glean(
         application_id="glean-python-test",
@@ -222,10 +241,11 @@ def test_flush_queued_events_on_startup(safe_httpserver):
         configuration=Configuration(server_endpoint=safe_httpserver.url),
     )
 
-    assert 1 == len(safe_httpserver.requests)
+    if not NOOP_MODE:
+        assert 1 == len(safe_httpserver.requests)
 
-    request = safe_httpserver.requests[0]
-    assert "events" in request.url
+        request = safe_httpserver.requests[0]
+        assert "events" in request.url
 
 
 def test_flush_queued_events_on_startup_and_correctly_handle_preinit_events(
@@ -248,7 +268,10 @@ def test_flush_queued_events_on_startup_and_correctly_handle_preinit_events(
     )
 
     event.record(extra={EventKeys.SOME_EXTRA: "run1"})
-    assert 1 == len(event.test_get_value())
+    if NOOP_MODE:
+        assert not event.test_has_value()
+    else:
+        assert 1 == len(event.test_get_value())
 
     Dispatcher.set_task_queueing(True)
     event.record(extra={EventKeys.SOME_EXTRA: "pre-init"})
@@ -262,17 +285,18 @@ def test_flush_queued_events_on_startup_and_correctly_handle_preinit_events(
 
     event.record(extra={EventKeys.SOME_EXTRA: "post-init"})
 
-    assert 1 == len(safe_httpserver.requests)
-    request = safe_httpserver.requests[0]
-    assert "events" in request.url
+    if not NOOP_MODE:
+        assert 1 == len(safe_httpserver.requests)
+        request = safe_httpserver.requests[0]
+        assert "events" in request.url
 
-    assert 1 == len(event.test_get_value())
+        assert 1 == len(event.test_get_value())
 
-    Glean._submit_ping_by_name("events")
+        Glean._submit_ping_by_name("events")
 
-    assert 2 == len(safe_httpserver.requests)
-    request = safe_httpserver.requests[1]
-    assert "events" in request.url
+        assert 2 == len(safe_httpserver.requests)
+        request = safe_httpserver.requests[1]
+        assert "events" in request.url
 
 
 def test_long_extra_values_record_an_error():
@@ -293,7 +317,14 @@ def test_long_extra_values_record_an_error():
 
     click.record(extra={ClickKeys.OBJECT_ID: long_string})
 
-    assert 1 == click.test_get_num_recorded_errors(testing.ErrorType.INVALID_OVERFLOW)
+    if NOOP_MODE:
+        assert 0 == click.test_get_num_recorded_errors(
+            testing.ErrorType.INVALID_OVERFLOW
+        )
+    else:
+        assert 1 == click.test_get_num_recorded_errors(
+            testing.ErrorType.INVALID_OVERFLOW
+        )
 
 
 def test_event_enum_is_generated_correctly():
@@ -301,7 +332,6 @@ def test_event_enum_is_generated_correctly():
         ROOT.parent / "data" / "core.yaml", config={"allow_reserved": True}
     )
 
-    print(dir(metrics.environment))
     metrics.environment.event_example.record(
         {
             metrics.environment.event_example_keys.KEY1: "value1",
@@ -309,7 +339,10 @@ def test_event_enum_is_generated_correctly():
         }
     )
 
-    assert {
-        "key1": "value1",
-        "key2": "value2",
-    } == metrics.environment.event_example.test_get_value()[0].extra
+    if NOOP_MODE:
+        assert not metrics.environment.event_example.test_has_value()
+    else:
+        assert {
+            "key1": "value1",
+            "key2": "value2",
+        } == metrics.environment.event_example.test_get_value()[0].extra

@@ -9,6 +9,7 @@ from pathlib import Path
 from glean import load_metrics, load_pings
 from glean.metrics.ping import PingType
 from glean import _builtins
+from glean._ffi import NOOP_MODE
 
 
 ROOT = Path(__file__).parent
@@ -29,7 +30,10 @@ def test_working_metric():
 
     metrics.core_ping.flash_usage.add(1)
 
-    assert 1 == metrics.core_ping.flash_usage.test_get_value()
+    if NOOP_MODE:
+        assert not metrics.core_ping.flash_usage.test_has_value()
+    else:
+        assert 1 == metrics.core_ping.flash_usage.test_get_value()
 
 
 def test_kebab_case_pings():

@@ -10,6 +10,7 @@ from .. import _ffi
 from .._dispatcher import Dispatcher
 from ..testing import ErrorType
 from .. import _util
+from .._util import noop
 
 
 from .lifetime import Lifetime
@@ -40,20 +41,22 @@ class TimespanMetricType:
         self._disabled = disabled
         self._send_in_pings = send_in_pings
 
-        self._handle = _ffi.lib.glean_new_timespan_metric(
-            _ffi.ffi_encode_string(category),
-            _ffi.ffi_encode_string(name),
-            _ffi.ffi_encode_vec_string(send_in_pings),
-            len(send_in_pings),
-            lifetime.value,
-            disabled,
-            time_unit.value,
-        )
+        if not _ffi.NOOP_MODE:
+            self._handle = _ffi.lib.glean_new_timespan_metric(
+                _ffi.ffi_encode_string(category),
+                _ffi.ffi_encode_string(name),
+                _ffi.ffi_encode_vec_string(send_in_pings),
+                len(send_in_pings),
+                lifetime.value,
+                disabled,
+                time_unit.value,
+            )
 
     def __del__(self):
         if getattr(self, "_handle", 0) != 0:
             _ffi.lib.glean_destroy_timespan_metric(self._handle)
 
+    @noop(None)
     def start(self) -> None:
         """
         Start tracking time for the provided metric.
@@ -71,6 +74,7 @@ class TimespanMetricType:
         def start():
             _ffi.lib.glean_timespan_set_start(self._handle, start_time)
 
+    @noop(None)
     def stop(self) -> None:
         """
         Stop tracking time for the provided metric.
@@ -89,6 +93,7 @@ class TimespanMetricType:
         def stop():
             _ffi.lib.glean_timespan_set_stop(self._handle, stop_time)
 
+    @noop(None)
     def cancel(self) -> None:
         """
         Abort a previous `start` call. No error is recorded if no `start` was called.
@@ -131,6 +136,7 @@ class TimespanMetricType:
         """
         return self._TimespanContextManager(self)
 
+    @noop(None)
     def set_raw_nanos(self, elapsed_nanos: int) -> None:
         """
         Explicitly set the timespan value, in nanoseconds.
@@ -150,6 +156,7 @@ class TimespanMetricType:
         def set_raw_nanos():
             _ffi.lib.glean_timespan_set_raw_nanos(self._handle, elapsed_nanos)
 
+    @noop(False)
     def test_has_value(self, ping_name: Optional[str] = None) -> bool:
         """
         Tests whether a value is stored for the metric for testing purposes
@@ -171,6 +178,7 @@ class TimespanMetricType:
             )
         )
 
+    @noop(0)
     def test_get_value(self, ping_name: Optional[str] = None) -> int:
         """
         Returns the stored value for testing purposes only.
@@ -192,6 +200,7 @@ class TimespanMetricType:
             self._handle, _ffi.ffi_encode_string(ping_name)
         )
 
+    @noop(0)
     def test_get_num_recorded_errors(
         self, error_type: ErrorType, ping_name: Optional[str] = None
     ) -> int:

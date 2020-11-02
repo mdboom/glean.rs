@@ -11,6 +11,7 @@ from .. import _ffi
 from .._dispatcher import Dispatcher
 from ..testing import ErrorType
 from .. import _util
+from .._util import noop
 
 
 from .lifetime import Lifetime
@@ -96,21 +97,23 @@ class EventMetricType:
         self._disabled = disabled
         self._send_in_pings = send_in_pings
 
-        self._handle = _ffi.lib.glean_new_event_metric(
-            _ffi.ffi_encode_string(category),
-            _ffi.ffi_encode_string(name),
-            _ffi.ffi_encode_vec_string(send_in_pings),
-            len(send_in_pings),
-            lifetime.value,
-            disabled,
-            _ffi.ffi_encode_vec_string(allowed_extra_keys),
-            len(allowed_extra_keys),
-        )
+        if not _ffi.NOOP_MODE:
+            self._handle = _ffi.lib.glean_new_event_metric(
+                _ffi.ffi_encode_string(category),
+                _ffi.ffi_encode_string(name),
+                _ffi.ffi_encode_vec_string(send_in_pings),
+                len(send_in_pings),
+                lifetime.value,
+                disabled,
+                _ffi.ffi_encode_vec_string(allowed_extra_keys),
+                len(allowed_extra_keys),
+            )
 
     def __del__(self):
         if getattr(self, "_handle", 0) != 0:
             _ffi.lib.glean_destroy_event_metric(self._handle)
 
+    @noop(None)
     def record(self, extra: Optional[Dict[int, str]] = None) -> None:
         """
         Record an event by using the information provided by the instance of
@@ -146,6 +149,7 @@ class EventMetricType:
                 nextra,
             )
 
+    @noop(False)
     def test_has_value(self, ping_name: Optional[str] = None) -> bool:
         """
         Tests whether a value is stored for the metric for testing purposes
@@ -196,6 +200,7 @@ class EventMetricType:
 
         return [RecordedEventData(**x) for x in json_content]
 
+    @noop(0)
     def test_get_num_recorded_errors(
         self, error_type: ErrorType, ping_name: Optional[str] = None
     ) -> int:

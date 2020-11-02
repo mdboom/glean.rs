@@ -12,9 +12,10 @@ import pytest
 
 import pytest_localserver.http
 
-from glean import config
-from glean import testing
-from glean import __version__ as glean_version
+
+# WARNING: Don't import anything in glean from the toplevel here, so we have a
+# chance to switch to no-op mode before Glean is first imported.
+
 
 # This defines the location of the JSON schema used to validate the pings
 # created during unit testing. This uses the vendored schema.
@@ -30,8 +31,35 @@ GLEAN_PING_SCHEMA_PATH = (
 logging.getLogger(None).setLevel(logging.INFO)
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--noop", action="store_true", default=False, help="Run tests in no-op mode"
+    )
+
+
+def pytest_configure(config):
+    if config.getoption("--noop"):
+        __builtins__["GLEAN_NOOP_MODE"] = True
+
+    from glean import config
+
+    # Setup a default webserver that pings will go to by default, so we don't hit
+    # the real telemetry endpoint from unit tests. Some tests that care about the
+    # pings actually being sent may still set up their own webservers using the
+    # `safe_httpserver` fixture that overrides this one. This is just to catch the
+    # pings from the majority of unit tests that don't care by default.
+    default_server = pytest_localserver.http.ContentServer()
+    default_server.daemon = True
+    default_server.start()
+    wait_for_server(default_server)
+    config.DEFAULT_TELEMETRY_ENDPOINT = default_server.url
+
+
 # This will be run before every test in the entire test suite
 def pytest_runtest_setup(item):
+    from glean import testing
+    from glean import __version__ as glean_version
+
     testing.reset_glean(
         application_id="glean-python-test", application_version=glean_version
     )
@@ -84,15 +112,3 @@ def wait_for_server(httpserver, timeout=30):
         except socket.error:
             if time.time() - start_time > timeout:
                 raise TimeoutError()
-
-
-# Setup a default webserver that pings will go to by default, so we don't hit
-# the real telemetry endpoint from unit tests. Some tests that care about the
-# pings actually being sent may still set up their own webservers using the
-# `safe_httpserver` fixture that overrides this one. This is just to catch the
-# pings from the majority of unit tests that don't care by default.
-default_server = pytest_localserver.http.ContentServer()
-default_server.daemon = True
-default_server.start()
-wait_for_server(default_server)
-config.DEFAULT_TELEMETRY_ENDPOINT = default_server.url

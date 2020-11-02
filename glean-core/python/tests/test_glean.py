@@ -14,11 +14,13 @@ import time
 import uuid
 
 
+import pytest
+
+
 from glean_parser import validate_ping
 from glean_parser.metrics import Lifetime as ParserLifetime
 from glean_parser.metrics import TimeUnit as ParserTimeUnit
 from glean_parser.metrics import MemoryUnit as ParserMemoryUnit
-import pytest
 
 
 from glean import Configuration, Glean, load_metrics
@@ -36,6 +38,7 @@ from glean.metrics import (
 )
 from glean.net import PingUploadWorker
 from glean.testing import _RecordingUploader
+from glean._ffi import NOOP_MODE
 
 
 GLEAN_APP_ID = "glean-python-test"
@@ -71,10 +74,11 @@ def test_submit_a_ping(safe_httpserver):
 
     _builtins.pings.baseline.submit()
 
-    assert 1 == len(safe_httpserver.requests)
+    if not NOOP_MODE:
+        assert 1 == len(safe_httpserver.requests)
 
-    request = safe_httpserver.requests[0]
-    assert "baseline" in request.url
+        request = safe_httpserver.requests[0]
+        assert "baseline" in request.url
 
 
 def test_submiting_an_empty_ping_doesnt_queue_work(safe_httpserver):
@@ -102,18 +106,29 @@ def test_experiments_recording():
     Glean.set_experiment_active("experiment_test", "branch_a")
     Glean.set_experiment_active("experiment_api", "branch_b", {"test_key": "value"})
 
-    assert Glean.test_is_experiment_active("experiment_api")
-    assert Glean.test_is_experiment_active("experiment_test")
+    if NOOP_MODE:
+        assert not Glean.test_is_experiment_active("experiment_api")
+        assert not Glean.test_is_experiment_active("experiment_test")
+    else:
+        assert Glean.test_is_experiment_active("experiment_api")
+        assert Glean.test_is_experiment_active("experiment_test")
 
     Glean.set_experiment_inactive("experiment_test")
 
-    assert Glean.test_is_experiment_active("experiment_api")
+    if NOOP_MODE:
+        assert not Glean.test_is_experiment_active("experiment_api")
+    else:
+        assert Glean.test_is_experiment_active("experiment_api")
     assert not Glean.test_is_experiment_active("experiment_test")
 
-    stored_data = Glean.test_get_experiment_data("experiment_api")
-    assert "branch_b" == stored_data.branch
-    assert 1 == len(stored_data.extra)
-    assert "value" == stored_data.extra["test_key"]
+    if NOOP_MODE:
+        with pytest.raises(ValueError):
+            stored_data = Glean.test_get_experiment_data("experiment_api")
+    else:
+        stored_data = Glean.test_get_experiment_data("experiment_api")
+        assert "branch_b" == stored_data.branch
+        assert 1 == len(stored_data.extra)
+        assert "value" == stored_data.extra["test_key"]
 
 
 def test_experiments_recording_before_glean_inits():
@@ -133,13 +148,11 @@ def test_experiments_recording_before_glean_inits():
         upload_enabled=True,
     )
 
-    assert Glean.test_is_experiment_active("experiment_set_preinit")
+    if NOOP_MODE:
+        assert not Glean.test_is_experiment_active("experiment_set_preinit")
+    else:
+        assert Glean.test_is_experiment_active("experiment_set_preinit")
     assert not Glean.test_is_experiment_active("experiment_preinit_disabled")
-
-
-@pytest.mark.skip
-def test_sending_of_background_pings():
-    pass
 
 
 def test_initialize_must_not_crash_if_data_dir_is_messed_up(tmpdir):
@@ -189,10 +202,16 @@ def test_queued_recorded_metrics_correctly_during_init():
         upload_enabled=True,
     )
 
-    assert counter_metric.test_has_value()
-    assert 2 == counter_metric.test_get_value()
+    if NOOP_MODE:
+        assert not counter_metric.test_has_value()
+        with pytest.raises(ValueError):
+            counter_metric.test_get_value()
+    else:
+        assert counter_metric.test_has_value()
+        assert 2 == counter_metric.test_get_value()
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="NOOP_MODE is free to replace configuration")
 def test_initializing_twice_is_a_no_op():
     before_config = Glean._configuration
 
@@ -203,11 +222,6 @@ def test_initializing_twice_is_a_no_op():
     )
 
     assert before_config is Glean._configuration
-
-
-@pytest.mark.skip
-def test_dont_handle_events_when_uninitialized():
-    pass
 
 
 def test_dont_schedule_pings_if_metrics_disabled(safe_httpserver):
@@ -254,10 +268,11 @@ def test_the_app_channel_must_be_correctly_set():
         upload_enabled=True,
         configuration=Configuration(channel="my-test-channel"),
     )
-    assert (
-        "my-test-channel"
-        == _builtins.metrics.glean.internal.metrics.app_channel.test_get_value()
-    )
+    if not NOOP_MODE:
+        assert (
+            "my-test-channel"
+            == _builtins.metrics.glean.internal.metrics.app_channel.test_get_value()
+        )
 
 
 def test_get_language_tag_reports_the_tag_for_the_default_locale():
@@ -265,22 +280,7 @@ def test_get_language_tag_reports_the_tag_for_the_default_locale():
     assert re.match("(und)|([a-z][a-z]-[A-Z][A-Z])", tag)
 
 
-@pytest.mark.skip
-def test_get_language_tag_reports_the_correct_tag_for_a_non_default_language():
-    """
-    Not relevant for non-Java platforms.
-    """
-    pass
-
-
-@pytest.mark.skip
-def test_get_language_reports_the_modern_translation_for_some_languages():
-    """
-    Not relevant for non-Java platforms.
-    """
-    pass
-
-
+@pytest.mark.skipif(NOOP_MODE, reason="Can't send pings in NOOP_MODE")
 def test_ping_collection_must_happen_after_currently_scheduled_metrics_recordings(
     tmpdir, ping_schema_url, monkeypatch
 ):
@@ -354,19 +354,28 @@ def test_basic_metrics_should_be_cleared_when_disabling_uploading():
     )
 
     counter_metric.add(10)
-    assert counter_metric.test_has_value()
+    if NOOP_MODE:
+        assert not counter_metric.test_has_value()
+    else:
+        assert counter_metric.test_has_value()
 
     Glean.set_upload_enabled(False)
     assert not counter_metric.test_has_value()
+
     counter_metric.add(10)
     assert not counter_metric.test_has_value()
 
     Glean.set_upload_enabled(True)
     assert not counter_metric.test_has_value()
+
     counter_metric.add(10)
-    assert counter_metric.test_has_value()
+    if NOOP_MODE:
+        assert not counter_metric.test_has_value()
+    else:
+        assert counter_metric.test_has_value()
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="No built-in metrics in NOOP_MODE")
 def test_core_metrics_should_be_cleared_with_disabling_and_enabling_uploading():
     assert _builtins.metrics.glean.internal.metrics.os.test_has_value()
     Glean.set_upload_enabled(False)
@@ -396,11 +405,14 @@ def test_collect(ping_schema_url):
 
     json_tree = json.loads(json_content)
 
-    assert 10 == json_tree["metrics"]["counter"]["telemetry.counter_metric"]
+    if NOOP_MODE:
+        assert {} == json_tree
+    else:
+        assert 10 == json_tree["metrics"]["counter"]["telemetry.counter_metric"]
 
-    assert 0 == validate_ping.validate_ping(
-        io.StringIO(json_content), sys.stdout, schema_url=ping_schema_url
-    )
+        assert 0 == validate_ping.validate_ping(
+            io.StringIO(json_content), sys.stdout, schema_url=ping_schema_url
+        )
 
 
 def test_tempdir_is_cleared():
@@ -411,6 +423,7 @@ def test_tempdir_is_cleared():
     assert not tempdir.exists()
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="NOOP_MODE doesn't create directories")
 def test_tempdir_is_cleared_multiprocess(safe_httpserver):
     safe_httpserver.serve_content(b"", code=200)
     Glean._configuration.server_endpoint = safe_httpserver.url
@@ -448,9 +461,13 @@ def test_set_application_build_id():
         upload_enabled=True,
     )
 
-    assert (
-        "123ABC" == _builtins.metrics.glean.internal.metrics.app_build.test_get_value()
-    )
+    if NOOP_MODE:
+        assert not _builtins.metrics.glean.internal.metrics.app_build.test_has_value()
+    else:
+        assert (
+            "123ABC"
+            == _builtins.metrics.glean.internal.metrics.app_build.test_get_value()
+        )
 
 
 def test_set_application_id_and_version(safe_httpserver):
@@ -464,20 +481,25 @@ def test_set_application_id_and_version(safe_httpserver):
         configuration=Configuration(server_endpoint=safe_httpserver.url),
     )
 
-    assert (
-        "my-version"
-        == _builtins.metrics.glean.internal.metrics.app_display_version.test_get_value()
-    )
+    if NOOP_MODE:
+        assert (
+            not _builtins.metrics.glean.internal.metrics.app_display_version.test_has_value()
+        )
+    else:
+        assert (
+            "my-version"
+            == _builtins.metrics.glean.internal.metrics.app_display_version.test_get_value()
+        )
 
-    Glean._configuration.server_endpoint = safe_httpserver.url
+        Glean._configuration.server_endpoint = safe_httpserver.url
 
-    _builtins.pings.baseline.submit()
+        _builtins.pings.baseline.submit()
 
-    assert 1 == len(safe_httpserver.requests)
+        assert 1 == len(safe_httpserver.requests)
 
-    request = safe_httpserver.requests[0]
-    assert "baseline" in request.url
-    assert "my-id" in request.url
+        request = safe_httpserver.requests[0]
+        assert "baseline" in request.url
+        assert "my-id" in request.url
 
 
 def test_disabling_upload_sends_deletion_request(safe_httpserver):
@@ -489,7 +511,8 @@ def test_disabling_upload_sends_deletion_request(safe_httpserver):
 
     # Disabling upload will trigger a deletion-request ping
     Glean.set_upload_enabled(False)
-    assert 1 == len(safe_httpserver.requests)
+    if not NOOP_MODE:
+        assert 1 == len(safe_httpserver.requests)
 
 
 def test_overflowing_the_task_queue_records_telemetry():
@@ -503,12 +526,19 @@ def test_overflowing_the_task_queue_records_telemetry():
 
     Dispatcher.flush_queued_initial_tasks()
 
-    assert 110 == _builtins.metrics.glean.error.preinit_tasks_overflow.test_get_value()
+    if NOOP_MODE:
+        assert not _builtins.metrics.glean.error.preinit_tasks_overflow.test_has_value()
+    else:
+        assert (
+            110 == _builtins.metrics.glean.error.preinit_tasks_overflow.test_get_value()
+        )
 
-    json_content = Glean.test_collect(_builtins.pings.metrics)
-    json_tree = json.loads(json_content)
+        json_content = Glean.test_collect(_builtins.pings.metrics)
+        json_tree = json.loads(json_content)
 
-    assert 110 == json_tree["metrics"]["counter"]["glean.error.preinit_tasks_overflow"]
+        assert (
+            110 == json_tree["metrics"]["counter"]["glean.error.preinit_tasks_overflow"]
+        )
 
 
 def test_configuration_property(safe_httpserver):
@@ -528,12 +558,14 @@ def test_configuration_property(safe_httpserver):
 
     _builtins.pings.baseline.submit()
 
-    assert 1 == len(safe_httpserver.requests)
+    if not NOOP_MODE:
+        assert 1 == len(safe_httpserver.requests)
 
-    request = safe_httpserver.requests[0]
-    assert "baseline" in request.url
+        request = safe_httpserver.requests[0]
+        assert "baseline" in request.url
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="Sending pings is disabled in NOOP_MODE")
 def test_sending_deletion_ping_if_disabled_outside_of_run(tmpdir, ping_schema_url):
     info_path = Path(str(tmpdir)) / "info.txt"
     data_dir = Path(str(tmpdir)) / "glean"
@@ -606,6 +638,7 @@ def test_no_sending_deletion_ping_if_unchanged_outside_of_run(safe_httpserver, t
     assert 0 == len(safe_httpserver.requests)
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="NOOP_MODE doesn't launch subprocesses")
 def test_dont_allow_multiprocessing(monkeypatch, safe_httpserver):
     safe_httpserver.serve_content(b"", code=200)
 
@@ -655,11 +688,17 @@ def test_clear_application_lifetime_metrics(tmpdir):
     counter_metric.add(10)
     metrics.core_ping.seq.add(10)
 
-    assert counter_metric.test_has_value()
-    assert counter_metric.test_get_value() == 10
+    if NOOP_MODE:
+        assert not counter_metric.test_has_value()
+    else:
+        assert counter_metric.test_has_value()
+        assert counter_metric.test_get_value() == 10
 
-    assert metrics.core_ping.seq.test_has_value()
-    assert metrics.core_ping.seq.test_get_value() == 10
+    if NOOP_MODE:
+        assert not metrics.core_ping.seq.test_has_value()
+    else:
+        assert metrics.core_ping.seq.test_has_value()
+        assert metrics.core_ping.seq.test_get_value() == 10
 
     Glean._reset()
 
@@ -691,6 +730,7 @@ def test_confirm_enums_match_values_in_glean_parser():
             assert g_enum[name.upper()].value == gp_enum[name].value
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="NOOP_MODE has not presubmit queue")
 def test_presubmit_makes_a_valid_ping(tmpdir, ping_schema_url, monkeypatch):
     # Bug 1648140: Submitting a ping prior to initialize meant that the core
     # metrics wouldn't yet be set.
@@ -742,6 +782,7 @@ def test_presubmit_makes_a_valid_ping(tmpdir, ping_schema_url, monkeypatch):
     )
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="NOOP_MODE has no built-in metrics")
 def test_app_display_version_unknown():
     from glean import _builtins
 
@@ -758,6 +799,7 @@ def test_app_display_version_unknown():
     )
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="NOOP_MODE doesn't write anything to disk")
 def test_flipping_upload_enabled_respects_order_of_events(tmpdir, monkeypatch):
     Glean._reset()
 

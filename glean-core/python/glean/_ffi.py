@@ -18,6 +18,9 @@ from ._glean_ffi import ffi  # type: ignore
 LANGUAGE_BINDING_NAME = "Python"
 
 
+log = logging.getLogger("glean.rust_core")
+
+
 def get_shared_object_filename() -> str:  # pragma: no cover
     """
     Get the extension used for shared objects on the current platform.
@@ -34,10 +37,50 @@ def get_shared_object_filename() -> str:  # pragma: no cover
 _global_weakkeydict: Any = weakref.WeakKeyDictionary()
 
 
-lib = ffi.dlopen(str(Path(__file__).parent / get_shared_object_filename()))
+class _NoopMock:
+    def __getattr__(self, attr):
+        raise RuntimeError("Called FFI method in no-op mode")
+
+    FfiPingUploadTask_Upload = 0
+    FfiPingUploadTask_Wait = 1
+    FfiPingUploadTask_Done = 2
+
+    Lifetime_Ping = 0
+    Lifetime_Application = 1
+    Lifetime_User = 2
+
+    MemoryUnit_Byte = 0
+    MemoryUnit_Kilobyte = 1
+    MemoryUnit_Megabyte = 2
+    MemoryUnit_Gigabyte = 3
+
+    TimeUnit_Nanosecond = 0
+    TimeUnit_Microsecond = 1
+    TimeUnit_Millisecond = 2
+    TimeUnit_Second = 3
+    TimeUnit_Minute = 4
+    TimeUnit_Hour = 5
+    TimeUnit_Day = 6
 
 
-def setup_logging():
+# This variable is set in `conftest.py` when testing in no-op mode, and is
+# intended for testing only.
+if __builtins__.get("GLEAN_NOOP_MODE", False):  # type: ignore
+    lib = _NoopMock()
+    NOOP_MODE = True
+else:
+    sopath = Path(__file__).parent / get_shared_object_filename()
+    try:
+        lib = ffi.dlopen(str(sopath))
+    except Exception as e:
+        log.warning(f"Glean is running in no-op mode: Failed to load {sopath}: {e}")
+        lib = _NoopMock()
+        NOOP_MODE = True
+    else:
+        NOOP_MODE = False
+
+
+def setup_logging() -> None:
     """
     Sets up a pipe for communication of logging messages from the Rust core to
     the Python logging system. A thread is created to listen for messages on
@@ -46,13 +89,14 @@ def setup_logging():
 
     Must be called after the Glean core has been dlopen'd.
     """
+    if NOOP_MODE:
+        return
+
     r, w = os.pipe()
     lib.glean_enable_logging_to_fd(w)
 
     reader = os.fdopen(r, encoding="utf-8")
 
-    name = "glean.rust_core"
-    log = logging.getLogger(name)
     level_map = {
         "CRITICAL": logging.CRITICAL,
         "ERROR": logging.ERROR,

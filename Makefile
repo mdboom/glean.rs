@@ -76,6 +76,7 @@ test-ios-sample: ## Run the iOS UI tests on the sample app
 	bin/run-ios-sample-app-test.sh
 
 test-python: build-python ## Run all Python tests
+	$(GLEAN_PYENV)/bin/py.test glean-core/python/tests --noop $(PYTEST_ARGS)
 	$(GLEAN_PYENV)/bin/py.test glean-core/python/tests $(PYTEST_ARGS)
 
 test-csharp: ## Run all C# tests

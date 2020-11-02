@@ -7,6 +7,8 @@
 from glean import metrics
 from glean.metrics import Lifetime
 from glean import testing
+from glean._ffi import NOOP_MODE
+
 
 header = "eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkEyNTZHQ00ifQ"
 key = "OKOawDo13gRp2ojaHV7LFpZcgV7T6DVZKTyKOMTYUmKoTCVJRgckCL9kiMT03JGeipsEdY3mx_etLbbWSrFr05kLzcSr4qKAq7YN7e9jwQRb23nfa6c9d-StnImGyFDbSv04uVuxIp5Zms1gNxKKK2Da14B8S4rzVRltdYwam_lDp5XnZAYpQdb76FdIKLaVmqgfwX7XWRxv2322i-vDxRfqNzo_tETKzpVLzfiwQyeyPGLBIO56YJ7eObdv0je81860ppamavo35UgoRdbYaBcoh9QcfylQr66oc6vFWXRcZ_ZT2LawVCWTIy3brGPi6UklfCpIMfIjf7iGdXKHzg"
@@ -28,13 +30,19 @@ def test_the_api_saves_to_its_storage_engine():
 
     jwe_metric.set(header, key, init_vector, cipher_text, auth_tag)
 
-    assert jwe_metric.test_has_value()
-    assert jwe == jwe_metric.test_get_compact_representation()
+    if NOOP_MODE:
+        assert not jwe_metric.test_has_value()
+    else:
+        assert jwe_metric.test_has_value()
+        assert jwe == jwe_metric.test_get_compact_representation()
 
     jwe_metric.set(header, "", "", cipher_text, "")
 
-    assert jwe_metric.test_has_value()
-    assert minimum_jwe == jwe_metric.test_get_compact_representation()
+    if NOOP_MODE:
+        assert not jwe_metric.test_has_value()
+    else:
+        assert jwe_metric.test_has_value()
+        assert minimum_jwe == jwe_metric.test_get_compact_representation()
 
 
 def test_disabled_jwes_must_not_record_data():
@@ -62,12 +70,15 @@ def test_jwe_get_value_returns_correct_jwe_data_representation():
 
     jwe_metric.set(header, key, init_vector, cipher_text, auth_tag)
 
-    data = jwe_metric.test_get_value()
-    assert data.header == header
-    assert data.key == key
-    assert data.init_vector == init_vector
-    assert data.cipher_text == cipher_text
-    assert data.auth_tag == auth_tag
+    if NOOP_MODE:
+        assert not jwe_metric.test_has_value()
+    else:
+        data = jwe_metric.test_get_value()
+        assert data.header == header
+        assert data.key == key
+        assert data.init_vector == init_vector
+        assert data.cipher_text == cipher_text
+        assert data.auth_tag == auth_tag
 
 
 def test_the_api_saves_to_secondary_pings():
@@ -81,13 +92,19 @@ def test_the_api_saves_to_secondary_pings():
 
     jwe_metric.set(header, key, init_vector, cipher_text, auth_tag)
 
-    assert jwe_metric.test_has_value("store2")
-    assert jwe == jwe_metric.test_get_compact_representation("store2")
+    if NOOP_MODE:
+        assert not jwe_metric.test_has_value("store2")
+    else:
+        assert jwe_metric.test_has_value("store2")
+        assert jwe == jwe_metric.test_get_compact_representation("store2")
 
     jwe_metric.set(header, "", "", cipher_text, "")
 
-    assert jwe_metric.test_has_value("store2")
-    assert minimum_jwe == jwe_metric.test_get_compact_representation("store2")
+    if NOOP_MODE:
+        assert not jwe_metric.test_has_value("store2")
+    else:
+        assert jwe_metric.test_has_value("store2")
+        assert minimum_jwe == jwe_metric.test_get_compact_representation("store2")
 
 
 def test_setting_invalid_values_record_errors():
@@ -100,9 +117,22 @@ def test_setting_invalid_values_record_errors():
     )
 
     jwe_metric.set("X" * 1025, key, init_vector, cipher_text, auth_tag)
-    assert 1 == jwe_metric.test_get_num_recorded_errors(
-        testing.ErrorType.INVALID_OVERFLOW
-    )
+
+    if NOOP_MODE:
+        assert 0 == jwe_metric.test_get_num_recorded_errors(
+            testing.ErrorType.INVALID_OVERFLOW
+        )
+    else:
+        assert 1 == jwe_metric.test_get_num_recorded_errors(
+            testing.ErrorType.INVALID_OVERFLOW
+        )
 
     jwe_metric.set_with_compact_representation("")
-    assert 1 == jwe_metric.test_get_num_recorded_errors(testing.ErrorType.INVALID_VALUE)
+    if NOOP_MODE:
+        assert 0 == jwe_metric.test_get_num_recorded_errors(
+            testing.ErrorType.INVALID_OVERFLOW
+        )
+    else:
+        assert 1 == jwe_metric.test_get_num_recorded_errors(
+            testing.ErrorType.INVALID_VALUE
+        )

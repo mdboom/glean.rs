@@ -8,6 +8,7 @@ import pytest
 
 from glean import metrics
 from glean.metrics import Lifetime
+from glean._ffi import NOOP_MODE
 
 
 def test_the_api_saves_to_its_storage_engine():
@@ -21,13 +22,19 @@ def test_the_api_saves_to_its_storage_engine():
 
     boolean_metric.set(True)
 
-    assert boolean_metric.test_has_value()
-    assert True is boolean_metric.test_get_value()
+    if NOOP_MODE:
+        assert not boolean_metric.test_has_value()
+    else:
+        assert boolean_metric.test_has_value()
+        assert True is boolean_metric.test_get_value()
 
     boolean_metric.set(False)
 
-    assert boolean_metric.test_has_value()
-    assert False is boolean_metric.test_get_value()
+    if NOOP_MODE:
+        assert not boolean_metric.test_has_value()
+    else:
+        assert boolean_metric.test_has_value()
+        assert False is boolean_metric.test_get_value()
 
 
 def test_disabled_booleans_must_not_record_data():
@@ -68,10 +75,16 @@ def test_the_api_saves_to_secondary_pings():
 
     boolean_metric.set(True)
 
-    assert boolean_metric.test_has_value("store2")
-    assert True is boolean_metric.test_get_value("store2")
+    if NOOP_MODE:
+        assert not boolean_metric.test_has_value("store2")
+    else:
+        assert boolean_metric.test_has_value("store2")
+        assert True is boolean_metric.test_get_value("store2")
 
     boolean_metric.set(False)
 
-    assert boolean_metric.test_has_value("store2")
-    assert False is boolean_metric.test_get_value("store2")
+    if NOOP_MODE:
+        assert not boolean_metric.test_has_value("store2")
+    else:
+        assert boolean_metric.test_has_value("store2")
+        assert False is boolean_metric.test_get_value("store2")

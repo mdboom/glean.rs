@@ -6,12 +6,16 @@
 import uuid
 
 
+import pytest
+
+
 from glean import Glean
 from glean import metrics
 from glean._process_dispatcher import ProcessDispatcher
 from glean.net import PingUploadWorker
 from glean.net.http_client import HttpClientUploader
 from glean.net import ping_uploader
+from glean._ffi import NOOP_MODE
 
 
 def get_upload_failure_metric():
@@ -43,6 +47,7 @@ def test_400_error(safe_httpserver):
     assert 1 == len(safe_httpserver.requests)
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="NOOP_MODE can't submit pings")
 def test_400_error_submit(safe_httpserver, monkeypatch):
     safe_httpserver.serve_content(b"", code=400)
 
@@ -71,6 +76,7 @@ def test_500_error(safe_httpserver):
     assert 1 == len(safe_httpserver.requests)
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="NOOP_MODE can't submit pings")
 def test_500_error_submit(safe_httpserver, monkeypatch):
     safe_httpserver.serve_content(b"", code=500)
 
@@ -89,6 +95,7 @@ def test_500_error_submit(safe_httpserver, monkeypatch):
     assert 3 == metric["status_code_5xx"].test_get_value()
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="NOOP_MODE can't submit pings")
 def test_500_error_submit_concurrent_writing(slow_httpserver, monkeypatch):
     # This tests that concurrently writing to the database from the main process
     # and the ping uploading subprocess.
@@ -134,6 +141,7 @@ def test_unknown_scheme():
     assert type(response) is ping_uploader.UnrecoverableFailure
 
 
+@pytest.mark.skipif(NOOP_MODE, reason="NOOP_MODE can't submit pings")
 def test_ping_upload_worker_single_process(safe_httpserver):
     safe_httpserver.serve_content(b"", code=200)
     Glean._configuration.server_endpoint = safe_httpserver.url
