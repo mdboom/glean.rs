@@ -176,6 +176,34 @@ Assert.Equal(1, Install.firstRun.TestGetNumRecordedErrors(ErrorType.InvalidValue
 
 </div>
 
+<div data-lang="Rust" class="tab">
+
+```rust
+use glean_metrics;
+use chrono::Utc;
+
+install::first_run.set(); // Records "now"
+install::first_run.set(Some(Utc.ymd(2019, 3, 25)));  // Records a custom datetime
+```
+
+There are test APIs available too.
+
+```rust
+use glean_metrics;
+use glean::ErrorType;
+
+// Was anything recorded?
+assert!(install::first_run.test_get_value(None).is_some());
+// Was it the expected value?
+// NOTE: Datetimes always include a timezone offset from UTC, hence the
+// "-05:00" suffix.
+assert_eq!(Some(Utc.ymd(2019, 3, 25)), install::first_run.test_get_value(None).unwrap());
+// Was the value invalid?
+assertEquals(1, install::first_run.test_get_num_recorded_errors(ErrorType::InvalidValue));
+```
+
+</div>
+
 {{#include ../../tab_footer.md}}
 
 ## Limits
@@ -195,3 +223,4 @@ Assert.Equal(1, Install.firstRun.TestGetNumRecordedErrors(ErrorType.InvalidValue
 * [Kotlin API docs](../../../javadoc/glean/mozilla.telemetry.glean.private/-datetime-metric-type/index.html)
 * [Swift API docs](../../../swift/Classes/DatetimeMetricType.html)
 * [Python API docs](../../../python/glean/metrics/datetime.html)
+* [Rust API docs](../../../docs/glean/private/datetime/struct.DatetimeMetric.html)
