@@ -394,6 +394,7 @@ public class Glean {
 
     /// Handle foreground event and submit appropriate pings
     func handleForegroundEvent() {
+        Metrics.gleanValidation.foregroundCount.add(1)
         Pings.shared.baseline.submit(reason: .foreground)
     }
 

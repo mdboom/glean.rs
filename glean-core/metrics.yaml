@@ -542,3 +542,22 @@ glean.database:
     notification_emails:
       - glean-team@mozilla.com
     expires: never
+
+glean.usage:
+  foreground_count:
+    type: counter
+    description: >
+      A counter, incremented every time the app is brought to foreground. Mobile
+      only.
+    send_in_pings:
+      - metrics
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=1683707
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=1683707#c2
+    data_sensitivity:
+      - technical
+    notification_emails:
+      - glean-team@mozilla.com
+      - mdroettboom@mozilla.com
+    expires: never
