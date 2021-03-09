@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
+from pathlib import Path
 import threading
 import sys
 import time
@@ -12,9 +13,11 @@ import pytest
 
 
 from glean._dispatcher import Dispatcher
+from glean._process_dispatcher import ProcessDispatcher
 from glean import Glean
 from glean import metrics
 from glean.metrics import Lifetime
+from glean.glean import _rmtree
 
 
 def test_launch_correctly_adds_tasks_to_queue_if_queue_tasks_is_true():
@@ -221,3 +224,45 @@ def test_single_threaded_in_multiprocessing_subprocess():
     )
 
     assert string_metric.test_get_value() == "999"
+
+
+def test_module_path_change_pythonpath(tmpdir, monkeypatch):
+    """
+    If PYTHONPATH gets set to a place with a broken installation of Glean,
+    running a subprocess task should still work.
+    """
+    tmpdir = Path(tmpdir)
+    (tmpdir / "glean").mkdir()
+    with open(tmpdir / "glean" / "__init__.py", "w") as fd:
+        fd.write("\n")
+    (tmpdir / "foo").mkdir()
+
+    monkeypatch.setenv("PYTHONPATH", str(tmpdir))
+
+    ProcessDispatcher.dispatch(_rmtree, (str(tmpdir),))
+
+    returncode = ProcessDispatcher._last_process.wait()
+
+    assert returncode == 0
+
+    assert not (tmpdir / "foo").exists()
+
+
+def test_module_path_working(tmpdir):
+    """
+    Test that running a subprocess task works under normal circumstances
+    (without monkeying with PYTHONPATH).
+    """
+    tmpdir = Path(tmpdir)
+    (tmpdir / "glean").mkdir()
+    with open(tmpdir / "glean" / "__init__.py", "w") as fd:
+        fd.write("\n")
+    (tmpdir / "foo").mkdir()
+
+    ProcessDispatcher.dispatch(_rmtree, (str(tmpdir / "foo"),))
+
+    returncode = ProcessDispatcher._last_process.wait()
+
+    assert returncode == 0
+
+    assert not (tmpdir / "foo").exists()
